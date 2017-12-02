@@ -1,9 +1,10 @@
 #include "MemManager.h"
 
-CMemManager::CMemManager()
+CMemManager::CMemManager(uint allocWaterLevel)
 {
 	m_blockFree.clear();
 	m_allocStub.clear();
+	m_alloc_water_level = std::min( allocWaterLevel, (uint)(1<<30) );			// 最大阈值为 1G
 	m_allocSize = 0;
 }
 
@@ -17,8 +18,19 @@ CMemManager::~CMemManager()
 		{
 			// 内存分配采用 new char, 释放做类型转换,告知 delete 如何释放内存
 			delete (char*)*it;
+			m_allocSize -= itSet->first;
 		}
 	}
+
+	m_blockFree.clear();
+	m_allocStub.clear();
+
+	if (m_allocSize != 0)
+	{
+		std::cerr << "ERROR delete memory error m_allocSize=" << m_allocSize << std::endl;
+	}
+
+	// std::cout << "money release succ" << std::endl;
 }
 
 
@@ -121,6 +133,13 @@ int CMemManager::extend_block_list(uint blockSize)
 {
 	const uint extend_count = this->extend_block_count(blockSize);
 
+	// 检测当前总分配的内存，是否达到释放大内存块的水位
+	if (m_allocSize + extend_count*blockSize > m_alloc_water_level)
+	{
+		this->release_large_block(blockSize);
+	}
+
+	// 进行小内存分配
 	std::list<void*> &freeList = m_blockFree[blockSize];
 	std::set<void*> &allocSet = m_allocStub[blockSize];
 
@@ -181,32 +200,70 @@ int CMemManager::reduce_block_list(uint blockSize)
 	return 0;
 }
 
-
-
-int CMemManager::Test(void)
+// 从最大内存块链表中，释放一块即可, 类似于拆东墙补西墙，提高内存使用率
+int CMemManager::release_large_block(uint curBlockSize)
 {
-	printf("m_blockFree show............\n");
-	mlist::iterator itMap = m_blockFree.begin();
-	for(; itMap != m_blockFree.end(); ++itMap)
+	// 因为 map 按照key从小到大排序，逆序遍历即可
+	mset::reverse_iterator itStub = m_allocStub.rbegin();
+	for(; itStub != m_allocStub.rend(); ++itStub)
 	{
-		std::list<void*> &freeList = itMap->second;
-		printf("blocksize=%u, count=%d\n", itMap->first, freeList.size());
-		std::list<void*>::iterator itList = freeList.begin();
-	}
-	printf(".........................\n");
+		const uint blockSize = itStub->first;
+		if (blockSize <= curBlockSize)
+			return -1;
 
-	printf("m_allocSize=%db, %dk, %dm, %dG \n", 
+		std::set<void*> &allocSet = itStub->second;
+		if (allocSet.empty())
+			continue;
+
+		mlist::iterator itList = m_blockFree.find(blockSize);
+		if (itList == m_blockFree.end())
+			continue;
+
+		std::list<void*> &freeList = itList->second;
+		if (freeList.empty())
+			continue;
+
+		// 找到对应链表，摘取一块进行释放
+		void *mem = freeList.front();
+		freeList.pop_front();
+
+		std::set<void*>::iterator itSet = allocSet.find(mem);
+		if (itSet != allocSet.end())
+			allocSet.erase(itSet);
+
+		m_allocSize -= blockSize;
+		delete (char*)mem;
+
+		return 0;
+	}
+
+	return -1;
+}
+
+
+int CMemManager::Debug(void)
+{
+	printf("\n####### Alloc size=%uB, %uK, %uM, %uG ###############\n",
 		m_allocSize, m_allocSize/1024, m_allocSize/(1024*1024), m_allocSize/(1024*1024*1024));
+	
 	mset::iterator itSet = m_allocStub.begin();
 	for(; itSet != m_allocStub.end(); ++itSet)
 	{
-		const uint sizeb = itSet->first;
-		const uint sizek = sizeb/1024;
-		const uint sizem = sizek/1024;
-		const uint sizeg = sizem/1024;
-		printf("Stub blockSize=%uB %uK %uM %uG, count=%d\n", 
-			sizeb, sizek, sizem, sizeg, itSet->second.size());
+		const uint size = itSet->first;
+		printf("#### slot=%-8u %6uK %2uM %uG, alloc count=%u size=%uK\n", 
+			size, size/(1024), size/(1024*1024), size/(1024*1024*1024), itSet->second.size(), itSet->second.size()*size/1024);
 	} 
+	printf("############################################################\n\n");
+
+	printf("#################### free list #############################\n");
+	mlist::iterator itMap = m_blockFree.begin();
+	for(; itMap != m_blockFree.end(); ++itMap)
+	{
+		const uint size = itMap->first;
+		printf("#### slot=%-8u %6uK %2uM %uG, free count=%u size=%uK\n", 
+			size, size/(1024), size/(1024*1024), size/(1024*1024*1024), itMap->second.size(), itMap->second.size()*size/1024);
+	}
+	printf("############################################################\n");
 
 	return 0;
 }
