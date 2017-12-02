@@ -142,10 +142,10 @@ int CMemClient::release(void)
 }
 
 
-
-int CMemClient::Test(void)
+int CMemClient::Debug(void)
 {
-	printf("Check m_blockSize=%u, datalen=%u, skip=%u\n",m_blockSize, m_dataLen, m_skipLen);	
+	printf("Debug size=%ukb, len=%u, skip=%u\n", m_blockSize/1024, m_dataLen, m_skipLen);	
+
 	return 0;
 }
 
