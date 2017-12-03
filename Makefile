@@ -7,7 +7,7 @@ obj = ./obj
 bin = mem
 
 all: $(objFile)
-	@cd $(obj); $(CXX) -o ../$(bin) $(objFile)
+	@cd $(obj); $(CXX) -Wall -o ../$(bin) $(objFile)
 	@echo "make succ"
 
 main.o: 
