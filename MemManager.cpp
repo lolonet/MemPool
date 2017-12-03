@@ -143,7 +143,7 @@ int CMemManager::extend_block_list(uint blockSize)
 	std::list<void*> &freeList = m_blockFree[blockSize];
 	std::set<void*> &allocSet = m_allocStub[blockSize];
 
-	for(int i=0; i<extend_count; ++i)
+	for(uint i=0; i<extend_count; ++i)
 	{
 		void *mem = new char[blockSize];
 		if (mem == NULL)
@@ -183,7 +183,7 @@ int CMemManager::reduce_block_list(uint blockSize)
 	std::list<void*> &freeList = m_blockFree[blockSize];
 	std::set<void*> &allocSet = m_allocStub[blockSize];
 
-	for(int i=0; i<reduce_count; ++i)
+	for(uint i=0; i<reduce_count; ++i)
 	{
 		void *mem = freeList.front();
 		freeList.pop_front();
